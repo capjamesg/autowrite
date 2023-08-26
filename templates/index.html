@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>AutoWrite</title>
+        <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+        <style>
+            :root {
+                --primary-color: darkgreen;
+            }
+            * {
+                font-family: 'Inter', sans-serif;
+                box-sizing: border-box;
+            }
+            a {
+                color: var(--primary-color);
+            }
+            h1 {
+                border-bottom: 1px solid #ccc;
+            }
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            main {
+                padding: 1em;
+                max-width: 40em;
+                margin: auto;
+            }
+            #recommendation {
+                color: lightgrey;
+            }
+            details {
+                display: block;
+                margin: 1em 0;
+            }
+            summary {
+                margin: 1em 0;
+            }
+            input[type=text] {
+                border: 1px solid lightgray;
+                border-radius: 4px;
+                padding: 0.5em;
+                width: 100%;
+                margin-bottom: 0.5em;
+            }
+            button {
+                background-color: var(--primary-color);
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 0.5em;
+                width: 100%;
+                margin: 0.5em 0;
+                cursor: pointer;
+            }
+            #writing {
+                border: 1px solid lightgray;
+                border-radius: 4px;
+                padding: 0.5em;
+                width: 100%;
+                margin-bottom: 0.5em;
+                min-height: 600px;
+            }
+            #writing:focus {
+                outline: none;
+            }
+        </style>
+    </head>
+    <body>
+        <main>
+            <h1>AutoWrite</h1>
+            <p>Context-aware autocomplete.</p>
+            <details>
+                <summary>Choose URLs</summary>
+                <div id="urls">
+                    <input type="text" class="url" placeholder="URL" value="https://blog.roboflow.com/how-to-train-yolov5-on-a-custom-dataset/"><input type="checkbox" class="priority" id="priority1" name="priority1" value="priority1"><label for="priority1">Priority</label><br>
+                </div>
+                <button onclick="addURLBox()">Add URL</button>
+            </details>
+            <div id="writing" contenteditable="true" style="height: 100px; padding: 10px; font-size: 20px; font-family: sans-serif;"><span id="recommendation"></span></div>
+            <footer>
+                <p>Created by <a href="https://jamesg.blog">capjamesg</a>.</p>
+            </footer>
+        </main>
+    </body>
+    <script>
+        function addURLBox() {
+            var urls = document.getElementById("urls");
+            var new_url = document.createElement("input");
+            new_url.setAttribute("type", "text");
+            new_url.setAttribute("class", "url");
+            new_url.setAttribute("placeholder", "URL");
+            urls.appendChild(new_url);
+            var new_priority = document.createElement("input");
+            new_priority.setAttribute("type", "checkbox");
+            new_priority.setAttribute("class", "priority");
+            new_priority.setAttribute("id", "priority" + (document.getElementsByClassName("priority").length + 1));
+            new_priority.setAttribute("name", "priority" + (document.getElementsByClassName("priority").length + 1));
+            new_priority.setAttribute("value", "priority" + (document.getElementsByClassName("priority").length + 1));
+            urls.appendChild(new_priority);
+        }
+        document.getElementById("writing").addEventListener("keydown", function(event) {
+            var urls = document.getElementsByClassName("url");
+            var previous_word = document.getElementById("writing").innerText.split(" ")[document.getElementById("writing").innerText.split(" ").length - 1];
+            // get value from each url
+            var url_values = [];
+
+            for (var i = 0; i < urls.length; i++) {
+                var url = urls[i];
+                var priority = document.getElementById("priority" + (i + 1));
+                if (priority.checked) {
+                    url_values.push(url.value + "?priority");
+                } else {
+                    url_values.push(url.value);
+                }
+            }
+
+            // if space
+            var recommendation = document.getElementById("recommendation");
+            var text = document.getElementById("writing").innerText;
+            // remove recommendation text
+            if (recommendation.innerText.length > 0) {
+                text = text.substring(0, text.length - recommendation.innerText.length);
+            } else {
+                text = text.substring(0, text.length);
+            }
+
+            // if space, reset recommendation
+            if (
+                event.keyCode === 32
+            ) {
+                console.log("space");
+                recommendation.innerText = "";
+            }
+
+            // if new char that doesn't start with current word, reset recommendation
+            if (
+                event.keyCode >= 48 && event.keyCode <= 90
+            ) {
+                console.log("new char");
+                recommendation.innerText = "";
+            }
+
+            // if backspace, remove last character from recommendation
+            if (
+                event.keyCode === 8
+            ) {
+                console.log("backspace");
+                recommendation.innerText = "";
+            }
+
+            // if tab, accept first word from recommendation
+            if (
+                event.keyCode === 9
+            ) {
+                event.preventDefault();
+                if (recommendation.innerText.length > 0) {
+                    console.log("accepting recommendation");
+                    console.log("text: " + text, recommendation.innerText);
+                    var to_accept = recommendation.innerText.split(" ")[0];
+                    document.getElementById("writing").innerHTML = text + to_accept + " ";
+                    // add <span> to recommendation
+                    document.getElementById("writing").innerHTML += "<span id='recommendation'>" + recommendation.innerText.substring(to_accept.length, recommendation.innerText.length) + "</span>";
+                    recommendation.innerText = "";
+                    // move cursor to end if text area
+                    var range = document.createRange();
+                    var sel = window.getSelection();
+                    range.setStart(document.getElementById("writing"), 1);
+                    range.collapse(true);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+
+                } else {
+                    console.log("no recommendation");
+                    var query = text.split(" ")[text.split(" ").length - 1]
+                    if (text.split(" ").length > 1) {
+                        var previous_word = text.split(" ")[text.split(" ").length - 2]
+                    } else {
+                        var previous_word = "";
+                    }
+                    fetch("http://localhost:5000/surprisal?query=" + query + "&urls=" + url_values + "&previous_word=" + previous_word)
+                        .then(response => response.json())
+                        .then(data => {
+                            var top_candidate = data.next_word_predictions[0];
+                            var previous_word_result = data.previous_word;
+                            // show in lightgrey text,
+                            var recommendation = document.getElementById("recommendation");
+                            var word_length = text.split(" ")[text.split(" ").length - 1].length;
+                            console.log("recommending: " + top_candidate);
+                            if (previous_word_result != previous_word) {
+                                // replace last word with previoius_word_result
+                                console.log("replacing " + previous_word + " with " + previous_word_result);
+                                document.getElementById("writing").innerHTML = document.getElementById("writing").innerHTML.replace(previous_word, previous_word_result);
+                                // add <span> to recommendation
+                                // document.getElementById("writing").innerHTML += "<span id='recommendation'>" + recommendation.innerText.substring(previous_word_result.length, recommendation.innerText.length) + "</span>";
+                                // recommendation.innerText = "";
+                                // move cursor to end if text area
+                                var range = document.createRange();
+                                var sel = window.getSelection();
+                                range.setStart(document.getElementById("writing"), 1);
+                                range.collapse(true);
+                                sel.removeAllRanges();
+                                sel.addRange(range);
+                            }
+                            recommendation.innerHTML = top_candidate.substring(word_length, top_candidate.length);
+                        }).catch(error => {
+                            console.log(error);
+                        });
+                    }
+            }
+        });
+    </script>
+</html>
